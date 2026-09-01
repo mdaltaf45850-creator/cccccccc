@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cricket Scoreboard with Live Video Background</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #000;
+      color: #fff;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 30px;
+      position: relative;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Full-screen video element sitting behind everything */
+    #live-video {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    /* Keep UI elements above video layer */
+    .scoreboard-container, .editor-panel {
+      position: relative;
+      z-index: 10;
+    }
+
+    /* --- BROADCAST SCOREBOARD OVERLAY --- */
+    .scoreboard-container {
+      width: 100%;
+      max-width: 900px;
+      background: linear-gradient(180deg, rgba(24, 9, 40, 0.95) 0%, rgba(13, 4, 23, 0.95) 100%);
+      border-radius: 8px;
+      display: flex;
+      align-items: stretch;
+      overflow: hidden;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+      border: 1px solid rgba(255,255,255,0.2);
+      font-size: 14px;
+      backdrop-filter: blur(4px);
+    }
+
+    .score-badge {
+      background: linear-gradient(135deg, rgba(30, 9, 56, 0.9) 0%, rgba(48, 14, 84, 0.9) 100%);
+      padding: 10px 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 2px solid #3d1768;
+      min-width: 220px;
+    }
+
+    .team-name { font-size: 22px; font-weight: 900; letter-spacing: 1px; }
+    .score-overs { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; }
+    .main-score { font-size: 20px; font-weight: 800; color: #ffffff; }
+    .overs-text { font-size: 13px; color: #b3a4cb; }
+    .sub-projected { font-size: 10px; color: #9d8db8; font-weight: 700; text-transform: uppercase; margin-top: 2px; }
+
+    .batsmen-section {
+      flex: 1.2;
+      padding: 8px 15px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .player-row { display: flex; justify-content: space-between; align-items: center; }
+    .player-name { font-weight: 600; color: #e2d9f3; }
+    .player-stats { font-weight: 700; color: #ffffff; }
+
+    .projected-banner {
+      background: rgba(197, 17, 98, 0.9);
+      padding: 5px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      min-width: 90px;
+    }
+
+    .projected-label { font-size: 9px; font-weight: 800; line-height: 1.1; text-transform: uppercase; }
+    .projected-val { font-size: 18px; font-weight: 900; margin-top: 2px; }
+
+    .bowler-section {
+      flex: 1.5;
+      background: linear-gradient(90deg, rgba(2, 136, 209, 0.9) 0%, rgba(1, 87, 155, 0.9) 100%);
+      padding: 8px 15px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .bowler-info { display: flex; justify-content: space-between; font-weight: 700; font-size: 13px; }
+    .over-balls { display: flex; gap: 5px; }
+
+    .ball {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+    }
+
+    .ball.dot { background: #ffffff; color: #000; }
+    .ball.runs { background: #2e7d32; color: #fff; }
+    .ball.boundary { background: #f57f17; color: #fff; }
+    .ball.wicket { background: #d32f2f; color: #fff; }
+
+    .match-badge {
+      background: rgba(0, 131, 143, 0.9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 15px;
+      font-size: 18px;
+      font-weight: 900;
+    }
+
+    /* CONTROL PANEL */
+    .editor-panel {
+      width: 100%;
+      max-width: 900px;
+      background: rgba(36, 36, 36, 0.9);
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+      backdrop-filter: blur(5px);
+    }
+
+    .editor-panel h2 { margin-bottom: 15px; font-size: 18px; border-bottom: 2px solid #0288d1; padding-bottom: 5px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; }
+    .form-group.full-width { grid-column: 1 / -1; }
+    .form-group label { font-size: 12px; color: #aaa; font-weight: 600; }
+    .form-group input { padding: 8px; background: #333; border: 1px solid #444; border-radius: 4px; color: #fff; font-size: 14px; }
+    .ball-inputs { display: flex; gap: 8px; }
+    .ball-inputs input { width: 40px; text-align: center; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <!-- LIVE CAMERA / VIDEO BACKGROUND -->
+  <video id="live-video" autoplay playsinline muted></video>
+
+  <!-- SCOREBOARD DISPLAY OVERLAY -->
+  <div class="scoreboard-container">
+    <div class="score-badge">
+      <div class="team-name" id="disp-team">BH1</div>
+      <div class="score-overs">
+        <span class="main-score" id="disp-score">17-1</span>
+        <span class="overs-text" id="disp-overs">2.5 (12)</span>
+      </div>
+      <div class="sub-projected">Projected Score: <span id="disp-sub-proj">72</span></div>
+    </div>
+
+    <div class="batsmen-section">
+      <div class="player-row">
+        <span class="player-name" id="disp-bat1-name">Het P 🏏</span>
+        <span class="player-stats" id="disp-bat1-stats">7 (5)</span>
+      </div>
+      <div class="player-row">
+        <span class="player-name" id="disp-bat2-name">Bhavik P</span>
+        <span class="player-stats" id="disp-bat2-stats">4 (8)</span>
+      </div>
+    </div>
+
+    <div class="projected-banner">
+      <div class="projected-label">Projected<br>Score</div>
+      <div class="projected-val" id="disp-proj-main">72</div>
+    </div>
+
+    <div class="bowler-section">
+      <div class="bowler-info">
+        <span id="disp-bowl-name">Patidar ⚾</span>
+        <span id="disp-bowl-stats">0-11 (1.5)</span>
+      </div>
+      <div class="over-balls" id="disp-balls">
+        <div class="ball dot">0</div>
+        <div class="ball dot">0</div>
+        <div class="ball dot">0</div>
+        <div class="ball dot">0</div>
+        <div class="ball dot">0</div>
+        <div class="ball dot">0</div>
+      </div>
+    </div>
+
+    <div class="match-badge" id="disp-match-id">M1</div>
+  </div>
+
+  <!-- CONTROL / EDITOR PANEL -->
+  <div class="editor-panel">
+    <h2>Scoreboard Controller</h2>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Team Name</label>
+        <input type="text" id="input-team" value="BH1">
+      </div>
+      <div class="form-group">
+        <label>Score (Runs-Wickets)</label>
+        <input type="text" id="input-score" value="17-1">
+      </div>
+      <div class="form-group">
+        <label>Overs (Overs Played)</label>
+        <input type="text" id="input-overs" value="2.5 (12)">
+      </div>
+      <div class="form-group">
+        <label>Projected Score</label>
+        <input type="number" id="input-proj" value="72">
+      </div>
+      <div class="form-group">
+        <label>Striker Name & Runs (Balls)</label>
+        <input type="text" id="input-bat1-name" value="Het P 🏏">
+        <input type="text" id="input-bat1-stats" value="7 (5)">
+      </div>
+      <div class="form-group">
+        <label>Non-Striker Name & Runs (Balls)</label>
+        <input type="text" id="input-bat2-name" value="Bhavik P">
+        <input type="text" id="input-bat2-stats" value="4 (8)">
+      </div>
+      <div class="form-group">
+        <label>Bowler Name & Figures</label>
+        <input type="text" id="input-bowl-name" value="Patidar ⚾">
+        <input type="text" id="input-bowl-stats" value="0-11 (1.5)">
+      </div>
+      <div class="form-group">
+        <label>Match ID</label>
+        <input type="text" id="input-match-id" value="M1">
+      </div>
+
+      <div class="form-group full-width">
+        <label>Current Over Balls (0, 1, 2, 4, 6, W, WD, NB, etc.)</label>
+        <div class="ball-inputs">
+          <input type="text" class="input-ball" value="0">
+          <input type="text" class="input-ball" value="0">
+          <input type="text" class="input-ball" value="0">
+          <input type="text" class="input-ball" value="0">
+          <input type="text" class="input-ball" value="0">
+          <input type="text" class="input-ball" value="0">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Access camera stream and set as video background
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+      .then(stream => {
+        document.getElementById('live-video').srcObject = stream;
+      })
+      .catch(err => console.log("Camera access error:", err));
+
+    // Input bindings logic
+    const bindings = [
+      { input: 'input-team', output: 'disp-team' },
+      { input: 'input-score', output: 'disp-score' },
+      { input: 'input-overs', output: 'disp-overs' },
+      { input: 'input-proj', output: 'disp-proj-main', extraOutput: 'disp-sub-proj' },
+      { input: 'input-bat1-name', output: 'disp-bat1-name' },
+      { input: 'input-bat1-stats', output: 'disp-bat1-stats' },
+      { input: 'input-bat2-name', output: 'disp-bat2-name' },
+      { input: 'input-bat2-stats', output: 'disp-bat2-stats' },
+      { input: 'input-bowl-name', output: 'disp-bowl-name' },
+      { input: 'input-bowl-stats', output: 'disp-bowl-stats' },
+      { input: 'input-match-id', output: 'disp-match-id' }
+    ];
+
+    bindings.forEach(item => {
+      const inputEl = document.getElementById(item.input);
+      const outputEl = document.getElementById(item.output);
+      inputEl.addEventListener('input', (e) => {
+        outputEl.innerText = e.target.value;
+        if (item.extraOutput) document.getElementById(item.extraOutput).innerText = e.target.value;
+      });
+    });
+
+    const ballInputs = document.querySelectorAll('.input-ball');
+    const ballsContainer = document.getElementById('disp-balls');
+
+    function updateBallsDisplay() {
+      ballsContainer.innerHTML = '';
+      ballInputs.forEach(input => {
+        const val = input.value.trim().toUpperCase();
+        if (!val) return;
+        const ballDiv = document.createElement('div');
+        ballDiv.className = 'ball';
+        ballDiv.innerText = val;
+        if (val === 'W') ballDiv.classList.add('wicket');
+        else if (['4', '6'].includes(val)) ballDiv.classList.add('boundary');
+        else if (['1', '2', '3'].includes(val)) ballDiv.classList.add('runs');
+        else ballDiv.classList.add('dot');
+        ballsContainer.appendChild(ballDiv);
+      });
+    }
+
+    ballInputs.forEach(input => input.addEventListener('input', updateBallsDisplay));
+  </script>
+</body>
+</html>
